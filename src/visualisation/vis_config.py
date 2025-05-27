@@ -6,6 +6,7 @@ Configuration parameters for visualizations.
 Contains shared settings for plot styling, colors, and default parameters.
 """
 
+
 # Default plot parameters
 DEFAULT_PLOT_PARAMS = {
     'title_fontsize': 14,
@@ -37,6 +38,10 @@ COLOR_PALETTES = {
     'sequential': 'viridis',
     'diverging': 'coolwarm'
 }
+
+# Specific plot colors
+VIOLIN_FACE_COLOR = '#0B1D26'  # Blue
+SWARM_PLOT_COLOR = '#B72F6A'   # Orange
 
 # Plot styling defaults
 PLOT_STYLE = {
@@ -97,3 +102,7 @@ OUTPUT_SETTINGS = {
     'format': 'png',
     'bbox_inches': 'tight'
 }
+
+# Line thickness settings
+LINE_THICKNESS = 2
+LINE_THICKNESS_GRID = 2

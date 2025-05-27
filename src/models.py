@@ -10,6 +10,7 @@ from skopt import BayesSearchCV
 from skopt.space import Real, Integer, Categorical
 import joblib
 import os
+from imblearn.ensemble import BalancedRandomForestClassifier
 
 # %% Model factory function
 
@@ -31,10 +32,7 @@ def create_model(model_name: str, params: Dict = None) -> RandomForestClassifier
         return RandomForestClassifier(**params)
     
     elif model_name == "Balanced Random Forest":
-        # Ensure class_weight is set to 'balanced'
-        if 'class_weight' not in params:
-            params['class_weight'] = 'balanced'
-        return RandomForestClassifier(**params)
+        return BalancedRandomForestClassifier(**params)
     
     elif model_name == "Weighted Random Forest":
         # This will be configured with sample weights during training
