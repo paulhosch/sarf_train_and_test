@@ -275,6 +275,7 @@ def run_logo_cv_fold(datasets: Dict,
         "model": model_name,
         "training_sample_size": training_size,
         "training_sample_strategy": training_strategy,
+        "tuning_method": tuning_method,
         "best_params": best_params if tuning_method == "BayesSearchCV" else None,
         "testing_site": testing_site,
         "training_sites": ",".join(training_sites),
@@ -300,7 +301,11 @@ def run_experiment(config_path: str = "experiment_config.json", new_samples_each
     
     Args:
         config_path: Path to the experiment configuration file
-        new_samples_each_iteration: Flag to load new samples each iteration
+        new_samples_each_iteration: Flag to use different sample sets for each iteration.
+            If True, samples will be loaded from iteration-specific paths like:
+            '<input_data>/<case_study>/samples/iteration_<n>/<dataset_type>/<size>/samples/<strategy>.csv'
+            If False, the same samples will be used for all iterations from:
+            '<input_data>/<case_study>/samples/<dataset_type>/<size>/samples/<strategy>.csv'
         
     Returns:
         DataFrame with all experiment results
@@ -321,10 +326,6 @@ def run_experiment(config_path: str = "experiment_config.json", new_samples_each
     
     # Import modules here to avoid circular imports
     from src.data_handler import prepare_datasets_for_logo_cv
-    
-    # Prepare datasets for all case studies
-    print("Loading datasets...")
-    datasets = prepare_datasets_for_logo_cv(config)
     
     # Initialize results list
     all_results = []
@@ -347,6 +348,20 @@ def run_experiment(config_path: str = "experiment_config.json", new_samples_each
         # Generate a new random seed for this iteration based on the base seed
         iteration_seed = config["experiment_constants"]["random_seed"] + iteration
         
+        # For each iteration, load specific dataset if using per-iteration samples
+        if new_samples_each_iteration:
+            print(f"Loading datasets for {iteration_id}...")
+            datasets = prepare_datasets_for_logo_cv(
+                config, 
+                new_samples_each_iteration=new_samples_each_iteration,
+                iteration_id=iteration_id
+            )
+        else:
+            # If not using per-iteration samples, we only need to load datasets once
+            if iteration == 1:
+                print("Loading datasets...")
+                datasets = prepare_datasets_for_logo_cv(config)
+        
         for config_dict in config_combinations:
             # Update the random_state in model parameters for this iteration
             for model_name, params in config_dict.get('model_parameters', {}).items():
@@ -358,7 +373,7 @@ def run_experiment(config_path: str = "experiment_config.json", new_samples_each
                 
                 # Print progress
                 elapsed_time = time.time() - start_time
-                avg_time_per_run = elapsed_time / run_count
+                avg_time_per_run = elapsed_time / run_count if run_count > 0 else 0
                 estimated_total_time = avg_time_per_run * total_runs
                 estimated_remaining_time = estimated_total_time - elapsed_time
                 

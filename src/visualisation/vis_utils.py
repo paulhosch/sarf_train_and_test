@@ -20,8 +20,23 @@ from typing import Dict, List, Tuple, Any, Optional, Union
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import from project
-from src.visualization import create_output_dir
 from src.visualisation.vis_config import DEFAULT_PLOT_PARAMS, FIGURE_SIZES, COLOR_PALETTES, PLOT_STYLE, OUTPUT_SETTINGS
+
+def create_output_dir(experiment_id: str, config: Dict) -> str:
+    """
+    Create output directory for plots
+    
+    Args:
+        experiment_id: Name of the experiment
+        config: Experiment configuration with data paths
+        
+    Returns:
+        Path to the plots directory
+    """
+    output_data_path = config["data_paths"]["output_data"]
+    plot_dir = f"{output_data_path}/{experiment_id}/plots"
+    os.makedirs(plot_dir, exist_ok=True)
+    return plot_dir
 
 def load_experiment_data():
     """

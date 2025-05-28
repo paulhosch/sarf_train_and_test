@@ -117,12 +117,14 @@ def sort_categorical_features(df: pd.DataFrame,
     
     return df_transformed
 
-def prepare_datasets_for_logo_cv(config: Dict) -> Dict[str, Dict[str, pd.DataFrame]]:
+def prepare_datasets_for_logo_cv(config: Dict, new_samples_each_iteration: bool = False, iteration_id: Optional[str] = None) -> Dict[str, Dict[str, pd.DataFrame]]:
     """
     Prepare datasets for Leave-One-Group-Out Cross-Validation
     
     Args:
         config: Experiment configuration dictionary
+        new_samples_each_iteration: Whether to use per-iteration samples
+        iteration_id: ID of the current iteration (e.g., "iteration_1")
         
     Returns:
         Dictionary with datasets organized by case study and dataset type
@@ -146,7 +148,9 @@ def prepare_datasets_for_logo_cv(config: Dict) -> Dict[str, Dict[str, pd.DataFra
                 try:
                     key = f"{strategy}_{size}"
                     datasets[case_study]["training"][key] = load_samples(
-                        case_study, "training", size, strategy, config
+                        case_study, "training", size, strategy, config,
+                        new_samples_each_iteration=new_samples_each_iteration, 
+                        iteration_id=iteration_id
                     )
                 except FileNotFoundError as e:
                     print(f"Warning: {e}")
@@ -157,7 +161,9 @@ def prepare_datasets_for_logo_cv(config: Dict) -> Dict[str, Dict[str, pd.DataFra
                 try:
                     key = f"{strategy}_{size}"
                     datasets[case_study]["testing"][key] = load_samples(
-                        case_study, "testing", size, strategy, config
+                        case_study, "testing", size, strategy, config,
+                        new_samples_each_iteration=new_samples_each_iteration, 
+                        iteration_id=iteration_id
                     )
                 except FileNotFoundError as e:
                     print(f"Warning: {e}")

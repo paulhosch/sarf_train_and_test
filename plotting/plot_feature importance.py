@@ -17,9 +17,8 @@ import matplotlib.colors as mcolors
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import necessary modules from the project
-from src.visualization import create_output_dir
 from src.visualisation.vis_utils import (load_experiment_data, parse_feature_importance, 
-                                        set_plot_fonts, apply_plot_style, get_output_directory)
+                                        set_plot_fonts, apply_plot_style, get_output_directory, create_output_dir)
 from src.visualisation.vis_config import (DEFAULT_PLOT_PARAMS, FIGURE_SIZES, 
                                          COLOR_PALETTES, PLOT_STYLE, OUTPUT_SETTINGS,
                                          TABLE_STYLE, TABLE_COLORMAP)
@@ -35,6 +34,27 @@ FEATURE_ORDER = [
     'LAND_COVER_Crops', 'LAND_COVER_Built Area', 'LAND_COVER_Bare Ground',
     'LAND_COVER_Snow and Ice', 'LAND_COVER_Clouds', 'LAND_COVER_Rangeland'
 ]
+def format_feature_name(feature: str) -> str:
+    """
+    Format feature names for better display on plots.
+    Shortens LAND_COVER_ prefixed features to more concise form.
+    Places the land cover type and (LC) suffix on separate lines for better readability.
+    
+    Args:
+        feature: Original feature name
+        
+    Returns:
+        Formatted feature name for display
+    """
+    if feature.startswith('LAND_COVER_'):
+        # Extract the part after LAND_COVER_ and add (LC) suffix on a new line
+        land_cover_type = feature.replace('LAND_COVER_', '')
+        return f"{land_cover_type}_LC"
+    return feature
+
+# After FEATURE_ORDER definition, add DISPLAY_FEATURE_ORDER
+DISPLAY_FEATURE_ORDER = [format_feature_name(feature) for feature in FEATURE_ORDER]
+
 
 def parse_feature_importance(importance_str):
     """
@@ -392,7 +412,7 @@ def plot_feature_importance_by_strategy(results_df: pd.DataFrame,
         plot_data = plot_data.sort_values(['Feature', 'Method'])
         
         # Create bar plot with manual feature order
-        sns.barplot(
+        g = sns.barplot(
             data=plot_data,
             x='Feature',
             y='Importance',
@@ -404,6 +424,15 @@ def plot_feature_importance_by_strategy(results_df: pd.DataFrame,
             errorbar='sd',
             linewidth=bar_linewidth
         )
+        
+        # Update x-axis tick labels with formatted feature names
+        # Get the current tick positions
+        tick_positions = range(len(FEATURE_ORDER))
+        # Set the tick positions explicitly first
+        ax.set_xticks(tick_positions)
+        # Then set the tick labels with formatted feature names
+        formatted_labels = [format_feature_name(feature) for feature in FEATURE_ORDER]
+        ax.set_xticklabels(formatted_labels, rotation=45, ha='right', fontsize=tick_fontsize)
         
         # Add error bars if show_points is True (instead of stripplot)
         if show_points:
@@ -586,7 +615,21 @@ def plot_feature_importance_by_strategy(results_df: pd.DataFrame,
         """
         Wrap text at underscores when reaching width limit.
         Prioritizes breaking at underscores, then falls back to character width.
+        Also ensures that for land cover features, "(LC)" is on a separate line.
         """
+        # Special handling for land cover features that already have a newline with (LC)
+        if '\n(LC)' in text:
+            land_cover_type = text.replace('\n(LC)', '')
+            
+            # If the land cover type is short, just return as is
+            if len(land_cover_type) <= width:
+                return text
+                
+            # Otherwise, wrap the land cover type and keep (LC) on a separate line
+            wrapped_land_cover = wrap_text(land_cover_type, width)
+            return f"{wrapped_land_cover}\n(LC)"
+        
+        # Standard wrapping for other text
         if '_' not in text or len(text) <= width:
             return text
             
@@ -617,8 +660,10 @@ def plot_feature_importance_by_strategy(results_df: pd.DataFrame,
     cell_text = [[f"{val:.3f}" if isinstance(val, (int, float)) else val 
                   for val in row] for row in summary_df.values]
     
-    # Wrap column headers
-    wrapped_headers = [wrap_text(col) for col in summary_df.columns]
+    # Format and wrap column headers
+    formatted_headers = [format_feature_name(col) for col in summary_df.columns]
+    # Apply wrap_text to already formatted headers for multi-line display
+    wrapped_headers = [wrap_text(header) for header in formatted_headers]
     
     # Create and style the table
     table = ax_table.table(

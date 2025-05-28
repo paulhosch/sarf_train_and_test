@@ -8,6 +8,7 @@ This repository contains the workflow for the third part of the **saRFlood pipel
 - LeaveOneGroup(site)Out Cross-Validation (LOGO-CV)
 - Hyperparameter tuning (BayesSearchCV)
 - Feature importance assessment (MDI, MDA, SHAP)
+- Per-iteration sampling (use different training/testing samples for each iteration)
 
 ---
 
@@ -39,6 +40,29 @@ All experiment variables and parameters are defined in `experiment_config.json`.
 ```
 
 Other experiment parameters, such as the number of iterations or the hyperparameter search space, are also defined in this file.
+
+---
+
+## Running Experiments
+
+The main experiment runner script is `experiment_runner.py`. It supports a flag for per-iteration sampling:
+
+```python
+# Set to True to use different sample sets for each iteration
+new_samples_each_iteration = True
+```
+
+When this flag is enabled, the pipeline looks for samples in iteration-specific directories:
+
+```
+<input_data>/<case_study>/samples/iteration_<n>/<dataset_type>/<size>/samples/<strategy>.csv
+```
+
+When disabled, the same samples are used for all iterations:
+
+```
+<input_data>/<case_study>/samples/<dataset_type>/<size>/samples/<strategy>.csv
+```
 
 ---
 

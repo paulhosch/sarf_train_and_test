@@ -84,7 +84,7 @@ plot_df = pd.DataFrame(plot_data)
 # %%
 # Create the plot
 font_size = 18
-title_size =20
+title_size = 20
 fig = plt.figure(figsize=(12.99, 4.72))
 
 n_cols = 4

@@ -11,14 +11,14 @@ import seaborn as sns
 from typing import Dict, List, Tuple, Any, Optional, Union
 import ast
 import json
+import re
 
 # Add parent directory to path to import project modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import necessary modules from the project
-from src.visualization import create_output_dir
 from src.visualisation.vis_utils import (load_experiment_data, create_error_plot, 
-                                        set_plot_fonts, apply_plot_style, get_output_directory)
+                                        set_plot_fonts, apply_plot_style, get_output_directory, create_output_dir)
 from src.visualisation.vis_config import (DEFAULT_PLOT_PARAMS, FIGURE_SIZES, 
                                          COLOR_PALETTES, PLOT_STYLE, OUTPUT_SETTINGS, 
                                          TABLE_STYLE, TABLE_COLORMAP, LAYOUT_SPACING, DEFAULT_PLOT_PARAMS)
@@ -728,7 +728,8 @@ def plot_strategies_performance(results_df: pd.DataFrame,
                     metric = f"{base_metric}_{metric_suffix}"
                     if metric in site_data.columns:
                         mean_value = site_data[metric].mean()
-                        metrics_data[display_metric_names[i]].append(f"{mean_value:.3f}")
+                        std_value = site_data[metric].std()
+                        metrics_data[display_metric_names[i]].append(f"{mean_value:.3f} ({std_value:.3f})")
                     else:
                         metrics_data[display_metric_names[i]].append("N/A")
     else:
@@ -760,7 +761,8 @@ def plot_strategies_performance(results_df: pd.DataFrame,
                     metric = f"{base_metric}_{site_type}"
                     if metric in strategy_data.columns and len(strategy_data) > 0:
                         mean_value = strategy_data[metric].mean()
-                        metrics_data[display_metric_names[i]].append(f"{mean_value:.3f}")
+                        std_value = strategy_data[metric].std()
+                        metrics_data[display_metric_names[i]].append(f"{mean_value:.3f} ({std_value:.3f})")
                     else:
                         metrics_data[display_metric_names[i]].append("N/A")
     
@@ -773,10 +775,21 @@ def plot_strategies_performance(results_df: pd.DataFrame,
     for col in summary_df.columns:
         numeric_data[col] = []
         for val in summary_df[col]:
-            try:
-                numeric_data[col].append(float(val))
-            except (ValueError, TypeError):
-                numeric_data[col].append(np.nan)
+            if isinstance(val, str):
+                # Extract the mean value before the first space or parenthesis
+                match = re.match(r"([0-9\.\-eE]+)", val)
+                if match:
+                    try:
+                        numeric_data[col].append(float(match.group(1)))
+                    except ValueError:
+                        numeric_data[col].append(np.nan)
+                else:
+                    numeric_data[col].append(np.nan)
+            else:
+                try:
+                    numeric_data[col].append(float(val))
+                except (ValueError, TypeError):
+                    numeric_data[col].append(np.nan)
     
     numeric_df = pd.DataFrame(numeric_data, index=summary_df.index)
     

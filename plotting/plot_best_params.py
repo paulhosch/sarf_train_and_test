@@ -13,7 +13,7 @@ from typing import Dict, Any, Optional
 # Add parent directory to path to import project modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.visualisation.vis_utils import load_experiment_data
+from src.visualisation.vis_utils import load_experiment_data, create_output_dir
 from src.visualisation.vis_config import DEFAULT_PLOT_PARAMS
 
 # %%

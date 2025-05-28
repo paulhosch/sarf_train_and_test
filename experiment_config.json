@@ -86,9 +86,9 @@
       "feature_importance_methods": ["mdi", "mda", "shap_importance"],
       "scoring_metrics": ["proportional_OA", "proportional_F1"],
       "scoring_metric_weights": [0.5, 0.5],
-      "tuning_iterations": 2,
-      "tuning_cv_folds": 3,
-      "experiment_iterations": 5
+      "tuning_iterations": 10,
+      "tuning_cv_folds": 5,
+      "experiment_iterations": 10
     },
     "model_parameters": {
       "Random Forest": {
@@ -99,12 +99,11 @@
           "min_samples_leaf": [1, 20],
           "max_features": ["sqrt", "log2", null],
           "max_leaf_nodes": [10, 100],
-          "bootstrap": [true, false],
           "criterion": ["gini", "entropy", "log_loss"],
           "max_samples": [0.5, 1.0]
         },
         "default_parameters": {
-          "n_estimators": 300
+          "bootstrap": true 
         }
       },
       "Balanced Random Forest": {
@@ -115,13 +114,13 @@
           "min_samples_leaf": [1, 20],
           "max_features": ["sqrt", "log2", null],
           "max_leaf_nodes": [10, 100],
-          "bootstrap": [true, false],
           "criterion": ["gini", "entropy", "log_loss"],
           "max_samples": [0.5, 1.0]
         },
         "default_parameters": {
-          "n_estimators": 300,
-          "sampling_strategy": "all"
+          "sampling_strategy": "all",
+          "bootstrap": true, 
+          "replacement": true
         }
       },
       "Weighted Random Forest": {
@@ -132,13 +131,12 @@
           "min_samples_leaf": [1, 20],
           "max_features": ["sqrt", "log2", null],
           "max_leaf_nodes": [10, 100],
-          "bootstrap": [true, false],
           "criterion": ["gini", "entropy", "log_loss"],
           "max_samples": [0.5, 1.0]
         },
         "default_parameters": {
-          "n_estimators": 300,
-          "class_weight": "balanced"
+          "class_weight": "balanced",
+          "bootstrap": true
         }
       }
     }
