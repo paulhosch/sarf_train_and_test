@@ -1,1 +1,7 @@
-project_draft.md
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+*.pywz
