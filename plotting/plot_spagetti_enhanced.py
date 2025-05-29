@@ -144,7 +144,9 @@ def plot_parallel_coordinates(df: pd.DataFrame,
                             colormap: str = 'viridis',
                             text_color: str = 'black',
                             label_outline_width: float = 2.0,
-                            output_dir: Optional[str] = None) -> str:
+                            output_dir: Optional[str] = None,
+                            show_bean_plots: bool = True,
+                            bean_plot_height: float = 0.25) -> str:
     """
     Create parallel coordinates plot for experiment results using smooth curves.
     
@@ -187,6 +189,12 @@ def plot_parallel_coordinates(df: pd.DataFrame,
         output_dir: Optional output directory for saving the plot (default: None)
                     - If provided, plot will be saved to this directory with auto-generated filename
                     - If None, uses config-based directory or default experiment directory
+        show_bean_plots: If True, show bean plots below each axis (default: True)
+                        - Shows distribution of scores for each category of each variable
+                        - Helps visualize performance variance within each variable
+        bean_plot_height: Height of bean plots as fraction of main plot height (default: 0.25)
+                         - Controls how much vertical space bean plots take up
+                         - 0.25 means bean plots are 25% the height of main plot
         
     Returns:
         Path to saved plot
@@ -362,11 +370,24 @@ def plot_parallel_coordinates(df: pd.DataFrame,
     max_score_idx = np.argmax(scores)
     print(f"Highest score: {scores[max_score_idx]:.4f} at index {max_score_idx}")
     
-    # Create the plot - use proper size for parallel coordinates
-    fig, host_ax = plt.subplots(figsize=figure_size)
+    # Create the plot - use proper size for parallel coordinates with optional bean plots
+    if show_bean_plots:
+        # Create subplots: main plot on top, bean plots below
+        fig = plt.figure(figsize=figure_size)
+        gs = fig.add_gridspec(2, 1, height_ratios=[1, bean_plot_height], hspace=0.1)
+        host_ax = fig.add_subplot(gs[0])  # Main parallel coordinates plot
+        bean_ax = fig.add_subplot(gs[1])  # Bean plots area
+    else:
+        # Original single plot layout
+        fig, host_ax = plt.subplots(figsize=figure_size)
+        bean_ax = None
     
     # Adjust subplot to leave more room for rightmost y-axis labels and colorbar
-    plt.subplots_adjust(right=0.75)  # Increased horizontal spacing for colorbar
+    if show_bean_plots:
+        # With gridspec, adjust the layout differently
+        gs.update(right=0.75)  # Leave room for colorbar
+    else:
+        plt.subplots_adjust(right=0.75)  # Increased horizontal spacing for colorbar
     
     # Make the axes
     axes = [host_ax] + [host_ax.twinx() for i in range(ym.shape[1] - 1)]
@@ -391,21 +412,9 @@ def plot_parallel_coordinates(df: pd.DataFrame,
         
         if ax != host_ax:
             ax.spines.left.set_visible(False)
-            # Center the ticks on the axis spine instead of positioning them on the right
-            ax.yaxis.set_ticks_position("none")  # Remove default tick positioning
+            ax.yaxis.set_ticks_position("right")
             # Scale the position to fit within the adjusted subplot area
             ax.spines.right.set_position(("axes", i / (ym.shape[1] - 1)))
-            
-            # Center the tick labels on the axis spine
-            ax.yaxis.set_label_position("right")
-            ax.tick_params(axis='y', which='both', 
-                          left=False, right=True,  # Show ticks on the right side of spine
-                          labelleft=False, labelright=False)  # Initially hide labels, will set manually
-        else:
-            # For the first axis, keep standard left positioning
-            ax.tick_params(axis='y', which='both', 
-                          left=True, right=False,
-                          labelleft=True, labelright=False)
         
         # Set up ticks for categorical variables
         if i < len(plot_vars) and (df_plot.iloc[:, i].dtype.kind not in ["i", "u", "f"] or plot_vars[i] == 'training_sample_size'):
@@ -419,53 +428,19 @@ def plot_parallel_coordinates(df: pd.DataFrame,
                 tick_labels = [format_label_text(str(key_val), add_line_breaks=True) for key_val in dic_var_i.keys()]
                 
                 ax.set_yticks(tick_positions)
+                ax.set_yticklabels(tick_labels, fontsize=tick_fontsize, fontweight='bold')
                 
-                if ax == host_ax:
-                    # First axis: also center labels on the axis spine (like other axes)
-                    ax.set_yticklabels([])  # Clear default labels
-                    # Remove any existing text objects from previous updates
-                    for text_obj in ax.texts[:]:
-                        text_obj.remove()
-                    # Create new centered labels
-                    for pos, label_text in zip(tick_positions, tick_labels):
-                        # For the first axis, use x-position of 0 (leftmost)
-                        axis_x_position = 0.0
-                        # Normalize tick position to 0-1 range based on the current axis limits
-                        y_min = ax.get_ylim()[0]
-                        y_max = ax.get_ylim()[1]
-                        y_normalized = (pos - y_min) / (y_max - y_min) if y_max != y_min else 0.5
-                        ax.text(axis_x_position, y_normalized, label_text, 
-                               transform=ax.transAxes,  # Use axes coordinates
-                               ha='center', va='center',
-                               fontsize=tick_fontsize, fontweight='bold',
-                               color=text_color,
-                               path_effects=[path_effects.withStroke(linewidth=label_outline_width, foreground='white')])
-                    
-                    # Ensure all ticks are shown with FixedLocator
+                # Add white outlines to y-axis labels for better readability
+                for label in ax.get_yticklabels():
+                    label.set_path_effects([path_effects.withStroke(linewidth=label_outline_width, foreground='white')])
+                    label.set_color(text_color)
+                
+                # For axis 0 (host axis), ensure all ticks are shown
+                if i == 0:
                     from matplotlib.ticker import FixedLocator, FixedFormatter
                     ax.yaxis.set_major_locator(FixedLocator(tick_positions))
-                    ax.yaxis.set_major_formatter(FixedFormatter([]))  # Empty formatter since we use manual text
-                    print(f"  Host axis final: Forced {len(tick_positions)} centered ticks at positions {tick_positions}")
-                else:
-                    # Other axes: center labels on the axis spine
-                    ax.set_yticklabels([])  # Clear default labels
-                    # Remove any existing text objects from previous updates
-                    for text_obj in ax.texts[:]:
-                        text_obj.remove()
-                    # Create new centered labels
-                    for pos, label_text in zip(tick_positions, tick_labels):
-                        # Use the correct axis position for twin axes
-                        axis_x_position = i / (ym.shape[1] - 1)
-                        # Normalize tick position to 0-1 range based on the current axis limits
-                        y_min = ax.get_ylim()[0]
-                        y_max = ax.get_ylim()[1]
-                        y_normalized = (pos - y_min) / (y_max - y_min) if y_max != y_min else 0.5
-                        ax.text(axis_x_position, y_normalized, label_text, 
-                               transform=ax.transAxes,  # Use axes coordinates
-                               ha='center', va='center',
-                               fontsize=tick_fontsize, fontweight='bold',
-                               color=text_color,
-                               path_effects=[path_effects.withStroke(linewidth=label_outline_width, foreground='white')])
+                    ax.yaxis.set_major_formatter(FixedFormatter(tick_labels))
+                    print(f"  Host axis: Forced {len(tick_positions)} ticks with FixedLocator")
                 
                 dic_idx += 1  # Move to next categorical variable
             else:
@@ -474,51 +449,11 @@ def plot_parallel_coordinates(df: pd.DataFrame,
             # For numeric variables, use default ticks
             print(f"Axis {i} ({plot_vars[i]}): Setting numeric ticks")
             ax.tick_params(labelsize=tick_fontsize)
-            
-            if ax == host_ax:
-                # First axis: also center labels on the axis spine (like other axes)
-                tick_positions = ax.get_yticks()
-                tick_labels = [f"{val:.0f}" if val == int(val) else f"{val:.1f}" for val in tick_positions]
-                
-                # Hide default labels and create centered ones
-                ax.set_yticklabels([])
-                # Remove any existing text objects from previous updates
-                for text_obj in ax.texts[:]:
-                    text_obj.remove()
-                # Create new centered labels
-                for pos, label_text in zip(tick_positions, tick_labels):
-                    # For the first axis, use x-position of 0 (leftmost)
-                    axis_x_position = 0.0
-                    # Normalize tick position to 0-1 range based on the current axis limits
-                    y_min = ax.get_ylim()[0]
-                    y_max = ax.get_ylim()[1]
-                    y_normalized = (pos - y_min) / (y_max - y_min) if y_max != y_min else 0.5
-                    ax.text(axis_x_position, y_normalized, label_text, 
-                           transform=ax.transAxes,  # Use axes coordinates
-                           ha='center', va='center',
-                           fontsize=tick_fontsize, fontweight='bold',
-                           color=text_color,
-                           path_effects=[path_effects.withStroke(linewidth=label_outline_width, foreground='white')])
-            else:
-                # Other axes: center labels on the axis spine
-                tick_positions = ax.get_yticks()
-                tick_labels = [f"{val:.0f}" if val == int(val) else f"{val:.1f}" for val in tick_positions]
-                
-                # Hide default labels and create centered ones
-                ax.set_yticklabels([])
-                for pos, label_text in zip(tick_positions, tick_labels):
-                    # Use the correct axis position for twin axes
-                    axis_x_position = i / (ym.shape[1] - 1)
-                    # Normalize tick position to 0-1 range based on the current axis limits
-                    y_min = ax.get_ylim()[0]
-                    y_max = ax.get_ylim()[1]
-                    y_normalized = (pos - y_min) / (y_max - y_min) if y_max != y_min else 0.5
-                    ax.text(axis_x_position, y_normalized, label_text, 
-                           transform=ax.transAxes,  # Use axes coordinates
-                           ha='center', va='center',
-                           fontsize=tick_fontsize, fontweight='bold',
-                           color=text_color,
-                           path_effects=[path_effects.withStroke(linewidth=label_outline_width, foreground='white')])
+            # Make numeric tick labels bold and add white outlines
+            for label in ax.get_yticklabels():
+                label.set_fontweight('bold')
+                label.set_path_effects([path_effects.withStroke(linewidth=label_outline_width, foreground='white')])
+                label.set_color(text_color)
     
     # Set up x-axis
     host_ax.set_xlim(left=0, right=ym.shape[1] - 1)
@@ -745,94 +680,31 @@ def plot_parallel_coordinates(df: pd.DataFrame,
                     
                     # Clear existing ticks and set new ones
                     ax.set_yticks(label_positions)
+                    ax.set_yticklabels(category_names, fontsize=tick_fontsize, fontweight='bold')
                     
-                    if ax == host_ax:
-                        # First axis: also center labels on the axis spine (like other axes)
-                        ax.set_yticklabels([])  # Clear default labels
-                        # Remove any existing text objects from previous updates
-                        for text_obj in ax.texts[:]:
-                            text_obj.remove()
-                        # Create new centered labels
-                        for pos, label_text in zip(label_positions, category_names):
-                            # For the first axis, use x-position of 0 (leftmost)
-                            axis_x_position = 0.0
-                            # Normalize tick position to 0-1 range based on the current axis limits
-                            y_min = ax.get_ylim()[0]
-                            y_max = ax.get_ylim()[1]
-                            y_normalized = (pos - y_min) / (y_max - y_min) if y_max != y_min else 0.5
-                            ax.text(axis_x_position, y_normalized, label_text, 
-                                   transform=ax.transAxes,  # Use axes coordinates
-                                   ha='center', va='center',
-                                   fontsize=tick_fontsize, fontweight='bold',
-                                   color=text_color,
-                                   path_effects=[path_effects.withStroke(linewidth=label_outline_width, foreground='white')])
-                    else:
-                        # Other axes: center labels on the axis spine
-                        ax.set_yticklabels([])  # Clear default labels
-                        # Remove any existing text objects from previous updates
-                        for text_obj in ax.texts[:]:
-                            text_obj.remove()
-                        # Create new centered labels
-                        for pos, label_text in zip(label_positions, category_names):
-                            # Use the correct axis position for twin axes
-                            axis_x_position = i / (ym.shape[1] - 1)
-                            # Normalize tick position to 0-1 range based on the current axis limits
-                            y_min = ax.get_ylim()[0]
-                            y_max = ax.get_ylim()[1]
-                            y_normalized = (pos - y_min) / (y_max - y_min) if y_max != y_min else 0.5
-                            ax.text(axis_x_position, y_normalized, label_text, 
-                                   transform=ax.transAxes,  # Use axes coordinates
-                                   ha='center', va='center',
-                                   fontsize=tick_fontsize, fontweight='bold',
-                                   color=text_color,
-                                   path_effects=[path_effects.withStroke(linewidth=label_outline_width, foreground='white')])
+                    # Add white outlines to y-axis labels for better readability
+                    for label in ax.get_yticklabels():
+                        label.set_path_effects([path_effects.withStroke(linewidth=label_outline_width, foreground='white')])
+                        label.set_color(text_color)
+                    
+                    # For axis 0 (host axis), ensure all ticks are shown with FixedLocator
+                    if i == 0:
+                        from matplotlib.ticker import FixedLocator, FixedFormatter
+                        ax.yaxis.set_major_locator(FixedLocator(label_positions))
+                        ax.yaxis.set_major_formatter(FixedFormatter(category_names))
+                        print(f"  Host axis final: Forced {len(label_positions)} ticks with FixedLocator at positions {label_positions}")
                 else:
                     # Single category - place in middle of original 0-1 range
                     ax.set_yticks([0.5])
-                    
-                    if ax == host_ax:
-                        # First axis: also center labels on the axis spine (like other axes)
-                        ax.set_yticklabels([])  # Clear default labels
-                        # Remove any existing text objects from previous updates
-                        for text_obj in ax.texts[:]:
-                            text_obj.remove()
-                        # Create new centered labels
-                        for pos, label_text in zip([0.5], category_names):
-                            # For the first axis, use x-position of 0 (leftmost)
-                            axis_x_position = 0.0
-                            # Normalize tick position to 0-1 range based on the current axis limits
-                            y_min = ax.get_ylim()[0]
-                            y_max = ax.get_ylim()[1]
-                            y_normalized = (pos - y_min) / (y_max - y_min) if y_max != y_min else 0.5
-                            ax.text(axis_x_position, y_normalized, label_text, 
-                                   transform=ax.transAxes,  # Use axes coordinates
-                                   ha='center', va='center',
-                                   fontsize=tick_fontsize, fontweight='bold',
-                                   color=text_color,
-                                   path_effects=[path_effects.withStroke(linewidth=label_outline_width, foreground='white')])
-                    else:
-                        # Other axes: center labels on the axis spine
-                        ax.set_yticklabels([])  # Clear default labels
-                        # Remove any existing text objects from previous updates
-                        for text_obj in ax.texts[:]:
-                            text_obj.remove()
-                        # Create new centered label
-                        # Use the correct axis position for twin axes
-                        axis_x_position = i / (ym.shape[1] - 1)
-                        # Normalize tick position to 0-1 range based on the current axis limits
-                        y_min = ax.get_ylim()[0]
-                        y_max = ax.get_ylim()[1]
-                        y_normalized = (0.5 - y_min) / (y_max - y_min) if y_max != y_min else 0.5
-                        ax.text(axis_x_position, y_normalized, category_names[0], 
-                               transform=ax.transAxes,  # Use axes coordinates
-                               ha='center', va='center',
-                               fontsize=tick_fontsize, fontweight='bold',
-                               color=text_color,
-                               path_effects=[path_effects.withStroke(linewidth=label_outline_width, foreground='white')])
-                        
+                    ax.set_yticklabels(category_names, fontsize=tick_fontsize, fontweight='bold')
+                    # Add white outlines to y-axis labels for better readability
+                    for label in ax.get_yticklabels():
+                        label.set_path_effects([path_effects.withStroke(linewidth=label_outline_width, foreground='white')])
+                        label.set_color(text_color)
+                    if i == 0:
                         from matplotlib.ticker import FixedLocator, FixedFormatter
                         ax.yaxis.set_major_locator(FixedLocator([0.5]))
-                        ax.yaxis.set_major_formatter(FixedFormatter([]))  # Empty formatter since we use manual text
+                        ax.yaxis.set_major_formatter(FixedFormatter(category_names))
             else:
                 print(f"ERROR: cat_var_idx {cat_var_idx} >= len(dics_vars) {len(dics_vars)} for axis {i}")
         else:
@@ -851,90 +723,33 @@ def plot_parallel_coordinates(df: pd.DataFrame,
                     
                     # Set ticks at normalized positions but show original values
                     ax.set_yticks(label_positions)
+                    ax.set_yticklabels([str(val) for val in unique_values], 
+                                     fontsize=tick_fontsize, fontweight='bold')
                     
-                    if ax == host_ax:
-                        # First axis: also center labels on the axis spine (like other axes)
-                        tick_positions = ax.get_yticks()
-                        tick_labels = [f"{val:.0f}" if val == int(val) else f"{val:.1f}" for val in tick_positions]
-                        
-                        # Hide default labels and create centered ones
-                        ax.set_yticklabels([])
-                        # Remove any existing text objects from previous updates
-                        for text_obj in ax.texts[:]:
-                            text_obj.remove()
-                        # Create new centered labels
-                        for pos, label_text in zip(tick_positions, tick_labels):
-                            # For the first axis, use x-position of 0 (leftmost)
-                            axis_x_position = 0.0
-                            # Normalize tick position to 0-1 range based on the current axis limits
-                            y_min = ax.get_ylim()[0]
-                            y_max = ax.get_ylim()[1]
-                            y_normalized = (pos - y_min) / (y_max - y_min) if y_max != y_min else 0.5
-                            ax.text(axis_x_position, y_normalized, label_text, 
-                                   transform=ax.transAxes,  # Use axes coordinates
-                                   ha='center', va='center',
-                                   fontsize=tick_fontsize, fontweight='bold',
-                                   color=text_color,
-                                   path_effects=[path_effects.withStroke(linewidth=label_outline_width, foreground='white')])
-                    else:
-                        # Other axes: center labels on the axis spine
-                        tick_positions = ax.get_yticks()
-                        tick_labels = [f"{val:.0f}" if val == int(val) else f"{val:.1f}" for val in tick_positions]
-                        
-                        # Hide default labels and create centered ones
-                        ax.set_yticklabels([])
-                        for pos, label_text in zip(tick_positions, tick_labels):
-                            # Use the correct axis position for twin axes
-                            axis_x_position = i / (ym.shape[1] - 1)
-                            # Normalize tick position to 0-1 range based on the current axis limits
-                            y_min = ax.get_ylim()[0]
-                            y_max = ax.get_ylim()[1]
-                            y_normalized = (pos - y_min) / (y_max - y_min) if y_max != y_min else 0.5
-                            ax.text(axis_x_position, y_normalized, label_text, 
-                                   transform=ax.transAxes,  # Use axes coordinates
-                                   ha='center', va='center',
-                                   fontsize=tick_fontsize, fontweight='bold',
-                                   color=text_color,
-                                   path_effects=[path_effects.withStroke(linewidth=label_outline_width, foreground='white')])
+                    # Add white outlines to y-axis labels for better readability
+                    for label in ax.get_yticklabels():
+                        label.set_path_effects([path_effects.withStroke(linewidth=label_outline_width, foreground='white')])
+                        label.set_color(text_color)
+                    
+                    # For axis 0 (host axis), ensure all ticks are shown
+                    if i == 0:
+                        from matplotlib.ticker import FixedLocator, FixedFormatter  
+                        ax.yaxis.set_major_locator(FixedLocator(label_positions))
+                        ax.yaxis.set_major_formatter(FixedFormatter([str(val) for val in unique_values]))
+                        print(f"  Host axis final: Forced {len(label_positions)} numeric ticks with FixedLocator")
                 else:
                     # Single value - place in middle of original 0-1 range
                     ax.set_yticks([0.5])
-                    
-                    if ax == host_ax:
-                        # First axis: also center labels on the axis spine (like other axes)
-                        ax.set_yticklabels([str(unique_values[0])], 
-                                         fontsize=tick_fontsize, fontweight='bold')
-                        # Add white outlines to y-axis labels for better readability
-                        for label in ax.get_yticklabels():
-                            label.set_path_effects([path_effects.withStroke(linewidth=label_outline_width, foreground='white')])
-                            label.set_color(text_color)
-                        
+                    ax.set_yticklabels([str(unique_values[0])], 
+                                     fontsize=tick_fontsize, fontweight='bold')
+                    # Add white outlines to y-axis labels for better readability
+                    for label in ax.get_yticklabels():
+                        label.set_path_effects([path_effects.withStroke(linewidth=label_outline_width, foreground='white')])
+                        label.set_color(text_color)
+                    if i == 0:
                         from matplotlib.ticker import FixedLocator, FixedFormatter
                         ax.yaxis.set_major_locator(FixedLocator([0.5]))
                         ax.yaxis.set_major_formatter(FixedFormatter([str(unique_values[0])]))
-                    else:
-                        # Other axes: center labels on the axis spine
-                        ax.set_yticklabels([])  # Clear default labels
-                        # Remove any existing text objects from previous updates
-                        for text_obj in ax.texts[:]:
-                            text_obj.remove()
-                        # Create new centered label
-                        # Use the correct axis position for twin axes
-                        axis_x_position = i / (ym.shape[1] - 1)
-                        # Normalize tick position to 0-1 range based on the current axis limits
-                        y_min = ax.get_ylim()[0]
-                        y_max = ax.get_ylim()[1]
-                        y_normalized = (0.5 - y_min) / (y_max - y_min) if y_max != y_min else 0.5
-                        ax.text(axis_x_position, y_normalized, str(unique_values[0]), 
-                               transform=ax.transAxes,  # Use axes coordinates
-                               ha='center', va='center',
-                               fontsize=tick_fontsize, fontweight='bold',
-                               color=text_color,
-                               path_effects=[path_effects.withStroke(linewidth=label_outline_width, foreground='white')])
-                        
-                        from matplotlib.ticker import FixedLocator, FixedFormatter
-                        ax.yaxis.set_major_locator(FixedLocator([0.5]))
-                        ax.yaxis.set_major_formatter(FixedFormatter([]))  # Empty formatter since we use manual text
             else:
                 print(f"Axis {i}: Using default numeric ticks for expanded range ({plot_y_min:.3f} to {plot_y_max:.3f})")
     
@@ -1016,48 +831,12 @@ def plot_parallel_coordinates(df: pd.DataFrame,
     sm.set_array([])
     cbar_ax = fig.add_axes([cbar_left, cbar_bottom, cbar_width, cbar_height])  # Slightly increased height
     cbar = plt.colorbar(sm, cax=cbar_ax)
-    
-    # Remove the default vertical colorbar label
-    # cbar.set_label() creates a vertical label - we'll position it manually instead
+    cbar.set_label(f'{score_type.replace("_", " ").title()}', 
+                   fontsize=axis_title_fontsize, fontweight='bold', color=text_color)
     
     # Remove colorbar outline and ticks but keep labels
     cbar.outline.set_visible(False)  # Remove colorbar outline
     cbar.ax.tick_params(length=0, width=0)  # Remove tick marks but keep labels
-    
-    # Add horizontal colorbar title below the colorbar, aligned with axis titles
-    # Calculate the position to align with x-axis labels
-    # Get the bottom position of x-axis labels from the main plot
-    x_axis_label_bottom = host_ax.xaxis.get_text_positions()[0][1] if hasattr(host_ax.xaxis, 'get_text_positions') else None
-    
-    # If we can't get the exact position, calculate based on tick params pad
-    if x_axis_label_bottom is None:
-        # Use the same vertical offset as the x-axis labels (pad=12 points below axis)
-        # Convert pad from points to figure coordinates
-        pad_points = 12  # Same as used in host_ax.tick_params
-        fig_dpi = fig.dpi if hasattr(fig, 'dpi') else 72
-        pad_inches = pad_points / 72.0
-        fig_height_inches = figure_size[1]
-        pad_fig = pad_inches / fig_height_inches
-        
-        # Position below the colorbar at the same level as axis titles
-        # Get the bottom edge of the plot area and subtract the same padding
-        cbar_title_y = cbar_bottom - pad_fig
-    else:
-        cbar_title_y = x_axis_label_bottom
-    
-    # Calculate horizontal center position of the colorbar
-    cbar_center_x = cbar_left + (cbar_width / 2)
-    
-    # Add the horizontal colorbar title
-    cbar_title_text = f'{score_type.replace("_", " ").title()}'
-    # Add line break before "Score" for better formatting
-    cbar_title_text = cbar_title_text.replace(' Score', '\nScore')
-    fig.text(cbar_center_x, cbar_title_y, cbar_title_text,
-             horizontalalignment='center', verticalalignment='top',
-             fontsize=axis_title_fontsize, fontweight='bold', color=text_color,
-             transform=fig.transFigure)
-    
-    print(f"Added horizontal colorbar title '{cbar_title_text}' at position ({cbar_center_x:.4f}, {cbar_title_y:.4f})")
     
     # Add red line indicator for highest score in colorbar
     max_score = scores.max()
@@ -1230,6 +1009,146 @@ def plot_parallel_coordinates(df: pd.DataFrame,
     
     # Add grid to main axis with line thickness and color from parameters
     host_ax.grid(True, alpha=0.3, axis='x', linewidth=axis_line_width, color=axis_line_color)
+    
+    # Create bean plots below each axis if requested
+    if show_bean_plots and bean_ax is not None:
+        print(f"\n=== CREATING BEAN PLOTS ===")
+        
+        # Prepare data for bean plots - use the original filtered data before aggregation
+        bean_data = create_combined_scores(plot_df.copy())
+        bean_data = split_training_strategy(bean_data)
+        
+        # Clear the bean plot area
+        bean_ax.clear()
+        bean_ax.set_xlim(-0.5, len(plot_vars) - 0.5)
+        
+        # Calculate global score range for consistent y-scale across all bean plots
+        all_scores = bean_data[score_type].dropna()
+        if color_min is not None and color_max is not None:
+            score_min, score_max = color_min, color_max
+        else:
+            score_min, score_max = all_scores.min(), all_scores.max()
+        score_range = score_max - score_min
+        bean_ax.set_ylim(score_min - 0.1 * score_range, score_max + 0.1 * score_range)
+        
+        print(f"Bean plot score range: {score_min:.3f} to {score_max:.3f}")
+        
+        # Create bean plot for each variable
+        for i, var in enumerate(plot_vars):
+            print(f"Creating bean plot for {var}")
+            
+            # Get all scores for this variable (regardless of category)
+            var_scores = bean_data[score_type].dropna()
+            
+            if len(var_scores) == 0:
+                print(f"  Skipping {var}: no valid scores")
+                continue
+            
+            # Create single violin plot for this variable
+            try:
+                violin = bean_ax.violinplot([var_scores.values], positions=[i], 
+                                          widths=0.6, showmeans=True, showmedians=True)
+                
+                # Style the violin with a neutral color
+                for pc in violin['bodies']:
+                    pc.set_facecolor('lightgray')
+                    pc.set_alpha(0.6)
+                    pc.set_edgecolor('black')
+                    pc.set_linewidth(0.5)
+                
+                # Style the statistical lines
+                for partname in ['cmeans', 'cmedians', 'cbars', 'cmins', 'cmaxs']:
+                    if partname in violin:
+                        violin[partname].set_edgecolor('black')
+                        violin[partname].set_linewidth(1.0)
+                
+                print(f"  Created violin plot with {len(var_scores)} total scores")
+                
+            except Exception as e:
+                print(f"  Error creating violin plot for {var}: {e}")
+                continue
+            
+            # Add colored scatter points on top
+            try:
+                # Get unique categories for this variable and assign colors
+                categories = sorted(bean_data[var].unique())
+                n_categories = len(categories)
+                
+                if n_categories <= 1:
+                    print(f"  Skipping scatter for {var}: only {n_categories} category")
+                    continue
+                
+                # Generate distinct colors for categories
+                colors_for_cats = plt.cm.get_cmap('tab10')(np.linspace(0, 1, n_categories))
+                
+                # Add scatter points for each category
+                for j, cat in enumerate(categories):
+                    cat_data = bean_data[bean_data[var] == cat]
+                    cat_scores = cat_data[score_type].dropna()
+                    
+                    if len(cat_scores) == 0:
+                        continue
+                    
+                    # Add small random horizontal jitter to avoid overlap
+                    n_points = len(cat_scores)
+                    jitter_strength = 0.15  # How much horizontal spread
+                    x_positions = np.full(n_points, i) + np.random.normal(0, jitter_strength, n_points)
+                    
+                    # Create scatter plot
+                    scatter = bean_ax.scatter(
+                        x_positions, cat_scores.values,
+                        c=[colors_for_cats[j]], 
+                        label=f'{format_label_text(str(cat), add_line_breaks=False)}' if i == 0 else "",
+                        alpha=0.7, 
+                        s=20,  # Point size
+                        edgecolors='black',
+                        linewidths=0.3
+                    )
+                    
+                    print(f"  Added {len(cat_scores)} scatter points for {cat}")
+                
+                print(f"  Successfully created scatter overlay with {n_categories} categories")
+                
+            except Exception as e:
+                print(f"  Error creating scatter overlay for {var}: {e}")
+        
+        # Style the bean plot area
+        bean_ax.set_xlabel('')
+        bean_ax.set_ylabel(f'{score_type.replace("_", " ").title()}', 
+                          fontsize=tick_fontsize, fontweight='bold', color=text_color)
+        bean_ax.tick_params(axis='y', labelsize=tick_fontsize-2, colors=text_color)
+        bean_ax.tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
+        
+        # Set x-ticks to align with main plot axes
+        bean_ax.set_xticks(range(len(plot_vars)))
+        bean_ax.set_xticklabels([])  # No labels, they're in the main plot
+        
+        # Add subtle grid
+        bean_ax.grid(True, alpha=0.2, axis='y', linewidth=axis_line_width*0.5, color=axis_line_color)
+        
+        # Style spines
+        for spine in bean_ax.spines.values():
+            spine.set_linewidth(axis_line_width*0.5)
+            spine.set_color(axis_line_color)
+        
+        bean_ax.spines['top'].set_visible(False)
+        bean_ax.spines['right'].set_visible(False)
+        
+        # Add legend for the scatter point colors (only show legend for first variable to avoid clutter)
+        if len(plot_vars) > 0:
+            try:
+                legend = bean_ax.legend(loc='upper right', fontsize=tick_fontsize-2, 
+                                      frameon=True, fancybox=True, shadow=True,
+                                      title=format_label_text(plot_vars[0], add_line_breaks=False))
+                legend.get_title().set_fontweight('bold')
+                legend.get_title().set_color(text_color)
+                for text in legend.get_texts():
+                    text.set_color(text_color)
+                print(f"Added legend for {plot_vars[0]} categories")
+            except Exception as e:
+                print(f"Error creating legend: {e}")
+        
+        print(f"Bean plots completed for {len(plot_vars)} variables")
     
     # Save plot
     if output_dir:
@@ -1448,7 +1367,7 @@ def main():
     
     testing_site_to_plot = results_df['testing_site'].iloc[0]
     # Plot aggregated data (current approach - fewer lines but cleaner trends)
-    print(f"\n1. Aggregated data for single testing site ({testing_site_to_plot}):")
+    print(f"\n1. Aggregated data for single testing site ({testing_site_to_plot}) with bean plots:")
     plot_path1 = plot_parallel_coordinates(
         results_df,
         score_type='cross_site_score',
@@ -1466,14 +1385,17 @@ def main():
         score_line_width=2.0,
         axis_line_width=3,
         axis_line_color='grey',
-        figure_size=(16, 8),
+        figure_size=(16, 16),  # Increased height for bean plots
         connect_to_colorbar=True,  # Enable colorbar connections
         colormap='cividis',
         text_color='black',
         label_outline_width=3,
-        output_dir=config["data_paths"]["output_data"]+"/plots/overall_perfromance"
+        output_dir=config["data_paths"]["output_data"]+"/plots/overall_perfromance",
+        show_bean_plots=True,
+        bean_plot_height=0.3  # Slightly larger bean plots
     )
-    plot_path1 = plot_parallel_coordinates(
+    print(f"\n2. Same-site score with smaller bean plots:")
+    plot_path2 = plot_parallel_coordinates(
         results_df,
         score_type='same_site_score',
         filter_dict={'testing_site': testing_site_to_plot},
@@ -1489,37 +1411,19 @@ def main():
         score_line_width=2.0,
         axis_line_width=3,
         axis_line_color='grey',
-        figure_size=(16, 8),
+        figure_size=(16, 16),  # Standard height
         connect_to_colorbar=True,  # Enable colorbar connections
         colormap='cividis',
         text_color='black',
         label_outline_width=2.0,
-        output_dir=config["data_paths"]["output_data"]+"/plots/overall_perfromance"
+        output_dir=config["data_paths"]["output_data"]+"/plots/overall_perfromance",
+        show_bean_plots=True,
+        bean_plot_height=0.25  # Standard bean plot size
     )
 
-    print(f"\nPlot saved at: {plot_path1}")
-    '''    
-        # Plot for all testing sites combined (average across testing sites)
-        print("\n2. Aggregated data across all testing sites (486 lines):")
-        plot_path2 = plot_parallel_coordinates(
-            results_df,
-            score_type='cross_site_score',
-            filter_dict=None,  # No filter = include all testing sites
-            experiment_id=config["experiment_id"] if config else "main_experiment", 
-            config=config,
-            plot_raw_data=False,
-            line_spacing=0.001,  # Same spacing for consistency
-            color_percentile_range=(5, 95),  # Same percentile range for consistency
-            tick_fontsize=14,
-            axis_title_fontsize=16,
-            plot_title_fontsize=16,
-            score_line_width=2.0,
-            axis_line_width=3,
-            axis_line_color='grey',
-            figure_size=(18, 6)
-        )
-        '''
-    #print(f"\nPlot saved at: {plot_path2}")
+    print(f"\nPlots saved at:")
+    print(f"  Cross-site: {plot_path1}")
+    print(f"  Same-site: {plot_path2}")
 
 # %%
 if __name__ == "__main__":
