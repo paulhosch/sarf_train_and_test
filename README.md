@@ -12,6 +12,69 @@ This repository contains the workflow for the third part of the **saRFlood pipel
 
 ---
 
+## Installation & Usage
+
+### Option 1: Complete Environment Recreation (Recommended)
+
+1. Clone the repository
+
+```bash
+git clone https://github.com/paulhosch/sarf_train_and_test.git
+cd sarf_train_and_test
+```
+
+2. Create environment from environment.yml (cross-platform)
+
+```bash
+conda env create -f environment.yml
+conda activate sarf_train_py38
+```
+
+### Option 2: Exact Environment Replication
+
+For exact replication of the development environment (same OS):
+
+```bash
+conda create --name sarf_train_py38 --file conda-explicit.txt
+conda activate sarf_train_py38
+```
+
+### Option 3: Manual Installation
+
+1. Clone the repository
+
+```bash
+git clone https://github.com/paulhosch/sarf_train_and_test.git
+cd sarf_train_and_test
+```
+
+2. Create and activate a conda environment with Python 3.8
+
+```bash
+conda create -n sarf_train_py38 python=3.8 -y
+conda activate sarf_train_py38
+```
+
+3. Install core geospatial packages via conda
+
+```bash
+conda install -c conda-forge geopandas rasterio shapely fiona pyproj -y
+```
+
+4. Install remaining requirements
+
+```bash
+pip install -r requirements.txt
+```
+
+### Environment Files
+
+- `environment.yml`: Cross-platform conda environment (recommended)
+- `conda-explicit.txt`: Exact environment specification with URLs and checksums
+- `requirements.txt`: Core packages for manual installation
+
+---
+
 ## Experiment Configuration
 
 All experiment variables and parameters are defined in `experiment_config.json`. Example:
